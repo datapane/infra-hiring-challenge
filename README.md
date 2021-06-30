@@ -41,7 +41,7 @@ You can look at any collection of technologies to perform sandboxing, such as sy
 ## Technologies
 
 - Build systems, tools, and scripts of your choice, e.g. poetry, `setup.py`, docker, etc.
-- The system must run on Linux and be presented as a set of Docker containers that run using docker-compose.
+- The system must run on Linux and be simple to setup and run
 - Any libraries you may find useful to help your task, we prioritise using existing libraries to accomplish tasks rather than building in-house and/or writing custom code that wouldn't scale to larger use-cases
 
 ## Requirements
