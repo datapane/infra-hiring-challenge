@@ -54,6 +54,7 @@ You can look at any collection of technologies to perform sandboxing, such as sy
 
 - Defence is depth is a valid strategy, how many of the sandboxing techniques can be combined
 - Consider how you would improve this approach and productise it - what issues do you foresee and how would you attempt to solve them
+- How would you tackle performance, i.e. delays in spinning up a pod on kubernetes, container startup delays, Python VM startup, reusing / caching files?
 - Tests
 
 # Review
