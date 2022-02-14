@@ -1,66 +1,85 @@
-# Python Systems / Infrastructure Hiring Challenge
+# Setup
+1. Build datapane-sandbox-base
+ 
+`./script/build-base-dockerfile.sh`
+ 
+2. Run the docker-compose file.
 
-# Introduction
+`docker-compose up`
 
-Datapane is an API-driven product for building analytics reports in Python - part of this includes running user's Python scripts and controlling their execution from a central server. This project simulates some of the necessary tasks required in developing such a system.
+3. Install newman:
 
-# Task
+`npm install -g newman`
 
-For this task we'll be building a simple API server with a few endpoints that reolve around accepting arbitary Python code and running it "securely".
+4. Run automated postman tests.
 
-The system must run on Linux, and can make use of any client/server technologies of your choice.
+`./test/test_all.sh`
 
-## Server
+## My solution
 
-The API server supports a few endpoints.
+### Stack used
 
-`/run-file/`
+I'm using docker-compose and redis. I had initially thought about using kubernetes, but using a local registry container
+can make things harder to set up. You have to tag the containers differently between minikube and dockerformac.
 
-this takes as a payload an uploaded python script containing the Python code to run
+I also spent a bit of time trying to get networkpolicies to work, using calico on dockerformac, before realising it's a 
+[known issue that it doesn't work](https://github.com/docker/for-mac/issues/4626).
 
-`/run-json/`
+Rather than not waste more time, I decided to use docker-compose to demonstrate the basic ideas.
 
-as per `run-file` above, but takes a JSON blob with a field called `code` containing the Python code to run
+My api docker container binds to the docker sock, allowing for the building and running of sandboxes to be kicked off 
+from within the api container.
 
-### Results
+A bash script with curl commands is used to pylint the solution, run the solution and send the output and status of the run 
+back to the api container.
 
-You may decide if the `/run-*` endpoints blocks and return a status code, or whether to implement an non-blocking model with a separate `/status/` endpoint to query each run. 
+It makes use of the linux `timeout` command to kill the script if it runs for longer than 20 seconds.
 
-Either way, the server should listen for commands from client and act upon them - it should always be able to accept new messages.
+### The api endpoints
 
-## Running Code
+### /run-json
 
-You need to be able to run arbitrary Python code in a clean environment - i.e. each invocation should not affect the others. You will need to make decisions around venvs, installed libraries and dependencies, and more.
+takes a json object of "code": "<base64_encoded_code>" and runs an id to check the status of.
 
-## Securing code
+### /run-file
 
-The uploaded Python code needs to be executed as securely as possible and handle code that may be hostile. As such you'll need to provide protections against user code that may attempt to use excess resources, e.g. time, space, cpu, etc.
+takes a file upload object 
 
-You can look at any collection of technologies to perform sandboxing, such as systemd slices/scopes, podman, docker, chroots, seccomp filtering, and/or anything else
+### /status/\<id\>
 
-## Technologies
+returns status of run id
 
-- Build systems, tools, and scripts of your choice, e.g. poetry, `setup.py`, docker, etc.
-- The system must run on Linux and be simple to setup and run
-- Any libraries you may find useful to help your task, we prioritise using existing libraries to accomplish tasks rather than building in-house and/or writing custom code that wouldn't scale to larger use-cases
+### /output/\<id\>
 
-## Requirements
+get base64 encoded stdout of run id
 
-- You do not need to worry about client/server service discovery - the locations of the systems can be hard-coded, provided as env vars, command-line parameters, etc.
-- Instructions should be provided on how to build / bundle / start the system
-- You should aim to use the latest Python language features, ecosystem, tooling, and libraries where possible
+## Base dockerfile
 
-### Optional Features
+Speeds up apt install because apt update doesn't cache.
 
-- Defence is depth is a valid strategy, how many of the sandboxing techniques can be combined
-- Consider how you would improve this approach and productise it - what issues do you foresee and how would you attempt to solve them
-- How would you tackle performance, i.e. delays in spinning up a pod on kubernetes, container startup delays, Python VM startup, reusing / caching files?
-- Tests
+Defines a lesser privileged user to run the pip install for, in case a malicious library is used.
 
-# Review
+## Testing
 
-Please don't spend more than 2-4 hours on this - we're looking to see how you approached the problem and the decisions made rather than a complete solution. This should be a fun challenge rather than a stressful endeavour.
+The postman automated tests run using newman. This allows for full end to end testing of the process.
 
-There is no right answer as such, we will mainly be looking at code quality, software architecture skills, completeness of the solution from a software engineering perspective, and clarity of thought.
+The file upload feature can't be automated as far as I know, because postman uses a "Select files" input instead 
+of a text field which would allow for a postman environment variable to be used.
 
-Once completed, please create a PR containing your work, send us an email, and schedule a [second follow-up interview](https://calendar.google.com/calendar/selfsched?sstoken=UU1sbG9QV1hfcHlGfGRlZmF1bHR8ODI1ZjRlZWJlZTY0ZTQ1ZTI4MzNkZThhOGQ5MjZkNzg).
+## A better approach
+
+In a production setting, you could use the kubernetes api to start a k8s Job resource to run   
+a docker image that was built using kaniko in the cluster.
+
+A message queue would take the process creation away from the api to reduce load.
+
+A way to garbage collect would be necessary. Re-using built containers for each user workspace 
+would be beneficial.
+
+In kubernetes, networkpolicy resource could be used to stop the running sandbox from communicating 
+with the internet. This would stop things like crypto mining from happening.
+
+I think having a separate k8s cluster for the sandboxes would be the most secure option. Then you could alter the network 
+policy to allow for messages to be sent back through redis. The redis cluster should also be only for the sandbox.
+
+Kubernetes can use cpu and memory limits to throttle the resource usage of requests.
