@@ -1,0 +1,25 @@
+version: "3.9"
+services:
+  web_tier:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      FLASK_ENV: development
+    networks:
+      - frontend
+      - backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  redis:
+    image: "redis:alpine"
+    command: >
+      --requirepass password
+    networks:
+      - backend
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
