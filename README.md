@@ -1,66 +1,84 @@
-# Python Systems / Infrastructure Hiring Challenge
+# Infra Hiring Challenge
 
-# Introduction
-
-Datapane is an API-driven product for building analytics reports in Python - part of this includes running user's Python scripts and controlling their execution from a central server. This project simulates some of the necessary tasks required in developing such a system.
-
-# Task
-
-For this task we'll be building a simple API server with a few endpoints that reolve around accepting arbitary Python code and running it "securely".
-
-The system must run on Linux, and can make use of any client/server technologies of your choice.
-
-## Server
-
-The API server supports a few endpoints.
-
-`/run-file/`
-
-this takes as a payload an uploaded python script containing the Python code to run
-
-`/run-json/`
-
-as per `run-file` above, but takes a JSON blob with a field called `code` containing the Python code to run
-
-### Results
-
-You may decide if the `/run-*` endpoints blocks and return a status code, or whether to implement an non-blocking model with a separate `/status/` endpoint to query each run. 
-
-Either way, the server should listen for commands from client and act upon them - it should always be able to accept new messages.
-
-## Running Code
-
-You need to be able to run arbitrary Python code in a clean environment - i.e. each invocation should not affect the others. You will need to make decisions around venvs, installed libraries and dependencies, and more.
-
-## Securing code
-
-The uploaded Python code needs to be executed as securely as possible and handle code that may be hostile. As such you'll need to provide protections against user code that may attempt to use excess resources, e.g. time, space, cpu, etc.
-
-You can look at any collection of technologies to perform sandboxing, such as systemd slices/scopes, podman, docker, chroots, seccomp filtering, and/or anything else
-
-## Technologies
-
-- Build systems, tools, and scripts of your choice, e.g. poetry, `setup.py`, docker, etc.
-- The system must run on Linux and be simple to setup and run
-- Any libraries you may find useful to help your task, we prioritise using existing libraries to accomplish tasks rather than building in-house and/or writing custom code that wouldn't scale to larger use-cases
+This is my submissions to the Infra Hiring Challenge for the second interview for Datapane.
 
 ## Requirements
+A docker environment, python3 and pipenv are all needed on the machine running this script.
+## Setup
 
-- You do not need to worry about client/server service discovery - the locations of the systems can be hard-coded, provided as env vars, command-line parameters, etc.
-- Instructions should be provided on how to build / bundle / start the system
-- You should aim to use the latest Python language features, ecosystem, tooling, and libraries where possible
+Use the package manager [pipenv] to install the necessary modules. Make sure you're in the [python-files directory] and run the following commands
 
-### Optional Features
+```bash
+pipenv shell
+pipenv install
+```
 
-- Defence is depth is a valid strategy, how many of the sandboxing techniques can be combined
-- Consider how you would improve this approach and productise it - what issues do you foresee and how would you attempt to solve them
-- How would you tackle performance, i.e. delays in spinning up a pod on kubernetes, container startup delays, Python VM startup, reusing / caching files?
-- Tests
+Edit the `app.py` file and set the directory you want to save the clients' projects to. This is for both endpoints.
+Edit the `python-api.py` file and set the root directory to this project directory.
 
-# Review
+## Usage
 
-Please don't spend more than 2-4 hours on this - we're looking to see how you approached the problem and the decisions made rather than a complete solution. This should be a fun challenge rather than a stressful endeavour.
+```
+python3 python-api.py
+```
 
-There is no right answer as such, we will mainly be looking at code quality, software architecture skills, completeness of the solution from a software engineering perspective, and clarity of thought.
+## Testing Uploads of files /run-file
+Using any method of your choice such as curl or postman, send a POST request as shown below
+```bash
+curl --location --request POST 'http://localhost:5000/run-file' \
+--form 'files[]=@"/home/rentan/main.py"' \
+--form 'client="test-client"'
+```
 
-Once completed, please create a PR containing your work, send us an email, and schedule a [second follow-up interview](https://calendar.google.com/calendar/selfsched?sstoken=UU1sbG9QV1hfcHlGfGRlZmF1bHR8ODI1ZjRlZWJlZTY0ZTQ1ZTI4MzNkZThhOGQ5MjZkNzg).
+
+## Testing Uploads of json blob
+```bash
+curl --location --request POST 'http://localhost:5000/run-json' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "script_name" : "main.py",
+    "client" : "new-company",
+    "code" : 
+    ["import flask, marshmallow, os, zipp, docker,time","print(\"hello world\")","os.chdir(\"/\")","print(os.getcwd())","print(\"goodbye world\")"]
+}'
+```
+
+
+### Output
+It should show the output of the script when completed
+
+## Notes
+### Security
+As security precautions, the image and container being built and ran will have a `python` user to execute the script which has no root privileges.
+
+The docker container is also run using namespaces isolation to prevent them from communicating with each other, as well as having virtual environments. 
+
+Each client has their own project directory and container to be used.
+
+The files being updated by the clients are also passed through a module to make sure the name is secure, as well as the size of the files being uploaded.
+
+There is also an option to limit the memory and cpu usage.
+
+For the time being only `.py` files are accepted
+
+### Performance
+A pre-built custom image called `datapane-py-slim` derived from `python:3.10-slim` was created, which had the necessary python3 modules installed, updated linux security packages, the python user created, and the necessary directories. 
+
+The image being used can be changed if performance is not suitable.
+
+The `runner` stage which uses this image only needs to switch to the python user, set env variable if needed, copy the clients' files, install the required python packages from those files, and run the main.py script
+
+Execution is fairly fast as most of the time depends on the clients' script.
+
+### Results
+For the time being the results of the scripts are only shown on stdout. It wasn't clear from the task what is needed to be done.
+
+## Improvements
+
+Upon further understanding I realised that there could be a `/status` endpoint from which the client could check their results from. This was not implemented in time but in the future a simple client ID and cookie/key could be used. This would make sure clients' couldn't access each other's results.
+
+Smaller docker images could be used as currently each invocation takes up 500mb.
+
+Currently there is no limit to how long the python script can take to execute. 
+
+With more time better logging could be implemented to identify why an image wasn't built or why a container failed to start such as exceeded the resource limits, failed scripts etc...
